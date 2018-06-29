@@ -3,27 +3,31 @@
 
 from __future__ import print_function, division
 import argparse
-from bnc_model import Bnc_Model
+#from bnc_model import Bnc_Model
 
-def read_file(graph_fname, request_fname):
-    node_names = dict()
-    node_ids = dict()
-    edges = set()
+def read_file(n_rows, n_cols, distances_file, taxis_file, requests_file):
+    n_regions = n_rows * n_cols
+
+    distances = []
+    with open(distances_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line: continue
+            d = float(line.strip().split(' '))
+            distances.append(d)
+
+    taxis = []
+    with open(taxis_fname) as f:
+        f.readline()
+        for line in f:
+            line = line.strip()
+            if not line: continue
+            [n1, n2] = line.strip().split(',')
+            [v1, v2] = [get_id(i) for i in (n1, n2)]
+            add_edge(v1, v2)
+
+    requests = []
     
-    def get_id(name):
-        if not name in node_names:
-            node_id = len(node_names)
-            node_names[name] = node_id
-            node_ids[node_id] = name 
-
-        return node_names[name]  
-
-    def add_edge(v1, v2):
-        first = min(v1, v2)
-        second = max(v1, v2)
-        edges.add((first, second))
-
-
     with open(graph_fname) as f:
         f.readline()
         for line in f:
@@ -58,43 +62,47 @@ def read_file(graph_fname, request_fname):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('graph_file', help='file containing adjacency matrix')
-    parser.add_argument('taxis_file', help='file containing the list of taxis')
-    parser.add_argument('requests_file', help='file containing the sequence of requests')
-    parser.add_argument('--timeout', type=float, default=None, help='set a time limit')
+    parser.add_argument('distances_file', 
+                        help='file containing distance matrix')
+    parser.add_argument('taxis_file', 
+                        help='file containing the list of taxis')
+    parser.add_argument('requests_file', 
+                        help='file containing the sequence of requests')
+    parser.add_argument('--timeout', type=float,default=None, 
+                        help='set a time limit')
     args = parser.parse_args()
 
     assert(args.gamma >= 0 and args.gamma <= 1)
 
-    (graph, taxis, requests) = read_input(args.graph_file, 
-                                          args.taxis_file,
-                                          args.requests_file)                      
+    (distances, taxis, requests) = read_file(args.distances_file,
+                                              args.taxis_file,
+                                              args.requests_file)                      
     timeout = args.timeout
     
-    kwargs = dict(graph=graph, 
+    kwargs = dict(distances=distances, 
                   taxis=taxis, 
                   requests=requests,
                   timeout=timeout)
     
-    m = Bnc_Model(**kwargs)
-    m.solve()
-    m.print_stat()
+    #m = Bnc_Model(**kwargs)
+    #m.solve()
+    #m.print_stat()
     
-    print('node count:', m.node_count)
-    print('mip gap:', m.mip_gap)
-    print('objective value:', m.objective)
-    print('runtime:', m.runtime)
+    #print('node count:', m.node_count)
+    #print('mip gap:', m.mip_gap)
+    #print('objective value:', m.objective)
+    #print('runtime:', m.runtime)
 
-    if (m.optimal):
-        print('OPTIMAL')
-    else:
-        print('NOT OPTIMAL')
+    #if (m.optimal):
+    #    print('OPTIMAL')
+    #else:
+    #    print('NOT OPTIMAL')
     
     # save clusters
-    f = open(args.out_file, 'w')
-    id = 0
-    for cluster in m.clusters:
-        for node in cluster:
-            f.write(node_ids[node] + ',' + str(id) + '\n')
-        id += 1
-    f.close() 
+    #f = open(args.out_file, 'w')
+    #id = 0
+    #for cluster in m.clusters:
+    #    for node in cluster:
+    #        f.write(node_ids[node] + ',' + str(id) + '\n')
+    #    id += 1
+    #f.close() 
