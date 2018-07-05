@@ -121,17 +121,35 @@ class Bnc_Model(object):
                 cvars.append(v)
             mvars.append(cvars)
             
-        #ineq_sense = GRB.GREATER_EQUAL if overlap else GRB.EQUAL
-        # constraint: each vertex in exactly/at least one cluster
+        # constraint (2)
         for v in range(n):
-            model.addConstr(quicksum([mvars[u][v] for u in range(n)]), 
-                                     GRB.EQUAL, 1)
+            model.addConstr(quicksum([mvars[u][v] for u in range(n)]),
+                            GRB.EQUAL, 1)
         
-        # constraint: each vertex in exactly/at least one cluster
+        # constraint (3)
         for u in range(n):
-            model.addConstr(quicksum([mvars[u][v] for v in range(n)]), 
-                                     GRB.EQUAL, 1)
-                                         
+            model.addConstr(quicksum([mvars[u][v] for v in range(n)]),
+                            GRB.EQUAL, 1)
+        
+        # constraint (5)
+        for i in range(n_requests):
+            model.addConstr(requests[i].pick0 - quicksum((taxis[k].a + t[taxis[k].o][requests[i].p])*[mvars[k][n_taxis + i] for k in range(n_taxis)]), 
+                            GRB.GREATER_EQUAL, 0)                                 
+        
+        # constraint (6)
+        for i in range(n_requests):
+            for j in range(n_requests):
+                model.addConstr(requests[j].pick0 - requests[i].pick0 - 
+                                t[requests[i].p][requests[i].d] - 
+                                t[requests[i].d][requests[j].d] +
+                                T * (1 - mvars[n_taxis + i][n_taxis + j]),
+                                GRB.GREATER_EQUAL, 0)
+        
+        # constraint (7)
+        for i in range(n_requests):
+            model.addConstr(requests[i].pick0, 
+                            GRB.GREATER_EQUAL, requests[i].dep)
+            
         # symmetry-breaking constraints
         if symmetry_breaking:
             model.addConstr(mvars[0][0], GRB.EQUAL, 1)

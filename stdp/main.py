@@ -13,55 +13,37 @@ def read_file(n_rows, n_cols, distances_file, taxis_file, requests_file):
         for line in f:
             line = line.strip()
             if not line: continue
-            d = float(line.strip().split(' '))
+            d = [float(i) for i in line.strip().split(' ')]
             distances.append(d)
 
     taxis = []
-    with open(taxis_fname) as f:
+    with open(taxis_file) as f:
         f.readline()
         for line in f:
             line = line.strip()
             if not line: continue
-            [n1, n2] = line.strip().split(',')
-            [v1, v2] = [get_id(i) for i in (n1, n2)]
-            add_edge(v1, v2)
+            t = int(line)
+            taxis.append(t)
 
     requests = []
-    
-    with open(graph_fname) as f:
+    with open(requests_file) as f:
         f.readline()
         for line in f:
             line = line.strip()
             if not line: continue
-            [n1, n2] = line.strip().split(',')
-            [v1, v2] = [get_id(i) for i in (n1, n2)]
-            add_edge(v1, v2)
+            r = [int(i) for i in line.strip().split(' ')]
+            requests.append(r)
 
-    n_vertices = max(node_ids.keys()) + 1
-    
-    
-    def get_constraints(cons_fname):    
-        constraints = []
-        if cons_fname is not None:
-            with open(cons_fname) as f:
-                f.readline()
-                for line in f:
-                    line = line.strip()
-                    if not line: continue
-                    [n1, n2, w] = line.split(',')
-                    [v1, v2] = [get_id(i) for i in (n1, n2)]
-                    w = float(w)
-                    constraints.append((v1, v2, w))
-        return constraints
-    cl_constraints = get_constraints(cl_fname)
-    ml_constraints = get_constraints(ml_fname)
-    
-    return n_vertices, list(edges), cl_constraints, ml_constraints, node_ids
+    return distances, taxis, requests
 
 
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
+    parser.add_argument('n_rows', 
+                        help='number of rows')
+    parser.add_argument('n_cols', 
+                        help='number of cols')
     parser.add_argument('distances_file', 
                         help='file containing distance matrix')
     parser.add_argument('taxis_file', 
@@ -72,12 +54,16 @@ if __name__ == '__main__':
                         help='set a time limit')
     args = parser.parse_args()
 
-    assert(args.gamma >= 0 and args.gamma <= 1)
-
-    (distances, taxis, requests) = read_file(args.distances_file,
-                                              args.taxis_file,
-                                              args.requests_file)                      
+    (distances, taxis, requests) = read_file(int(args.n_rows),
+                                             int(args.n_cols),
+                                             args.distances_file,
+                                             args.taxis_file,
+                                             args.requests_file)                      
     timeout = args.timeout
+    
+    print(distances)
+    print(taxis)
+    print(requests)
     
     kwargs = dict(distances=distances, 
                   taxis=taxis, 
