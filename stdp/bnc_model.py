@@ -110,125 +110,98 @@ class Bnc_Model(object):
         model.Params.PreCrush = 1
         model.Params.LazyConstraints = 1        
         
+        T = 1000000
         n_taxis = len(taxis)
         n_requests = len(requests)
         n = n_taxis + n_requests
-        mvars = []
+        t = distances 
+        x = []
         for i in range(n):
-            cvars = []
+            u = []
             for j in range(n):
                 v = model.addVar(lb=0.0, ub=1.0, vtype=GRB.BINARY)
-                cvars.append(v)
-            mvars.append(cvars)
+                u.append(v)
+            x.append(u)
+        
+        pick0 = []
+        for i in range(n_requests):
+            u = model.addVar(lb=0.0, ub=GRB.INFINITY, vtype=GRB.CONTINUOUS)
+            pick0.append(u)
             
         # constraint (2)
         for v in range(n):
-            model.addConstr(quicksum([mvars[u][v] for u in range(n)]),
+            model.addConstr(quicksum([x[u][v] for u in range(n)]),
                             GRB.EQUAL, 1)
         
         # constraint (3)
         for u in range(n):
-            model.addConstr(quicksum([mvars[u][v] for v in range(n)]),
+            model.addConstr(quicksum([x[u][v] for v in range(n)]),
                             GRB.EQUAL, 1)
         
         # constraint (5)
         for i in range(n_requests):
-            model.addConstr(requests[i].pick0 - quicksum((taxis[k].a + t[taxis[k].o][requests[i].p])*[mvars[k][n_taxis + i] for k in range(n_taxis)]), 
+            model.addConstr(pick0[i] - quicksum([(taxis[k][0] + t[taxis[k][1]][requests[i][1]]) * x[k][n_taxis + i] for k in range(n_taxis)]), 
                             GRB.GREATER_EQUAL, 0)                                 
         
         # constraint (6)
         for i in range(n_requests):
             for j in range(n_requests):
-                model.addConstr(requests[j].pick0 - requests[i].pick0 - 
-                                t[requests[i].p][requests[i].d] - 
-                                t[requests[i].d][requests[j].d] +
-                                T * (1 - mvars[n_taxis + i][n_taxis + j]),
+                model.addConstr(pick0[j] - pick0[i] - 
+                                t[requests[i][1]][requests[i][2]] - 
+                                t[requests[i][2]][requests[j][1]] +
+                                T * (1 - x[n_taxis + i][n_taxis + j]),
                                 GRB.GREATER_EQUAL, 0)
         
         # constraint (7)
         for i in range(n_requests):
-            model.addConstr(requests[i].pick0, 
-                            GRB.GREATER_EQUAL, requests[i].dep)
-            
-        # symmetry-breaking constraints
-        if symmetry_breaking:
-            model.addConstr(mvars[0][0], GRB.EQUAL, 1)
-            for i in range(2, k):
-                model.addConstr(quicksum([mvars[i-1][j] for j in range(n_vertices)]) <=
-                                quicksum([mvars[i][j] for j in range(n_vertices)]))
-        
-        
-        obj_expr = LinExpr()
-        wsum = sum(w for (_, _, w) in cl_constraints)
-        if wsum > 0:
-            coef = gamma/wsum
-            # indicators for violation of cl constraints
-            for (u, v, w) in cl_constraints:
-                y = model.addVar(lb=0.0, ub=1.0, vtype=GRB.CONTINUOUS)
-                for i in range(k):
-                    model.addConstr(y >= mvars[i][u] + mvars[i][v] - 1)
-                obj_expr.add(y, coef * w)
-                
-        # indicators for violation of ml constraints
-        wsum = sum(w for (_, _, w) in ml_constraints)                
-        if wsum > 0:
-            coef = (1-gamma)/wsum
-            for (u, v, w) in ml_constraints:
-                y = model.addVar(lb=0.0, ub=1.0, vtype=GRB.CONTINUOUS)
-                for i in range(k):
-                    model.addConstr(y >= mvars[i][u] - mvars[i][v])
-                    model.addConstr(y >= mvars[i][v] - mvars[i][u])
-                obj_expr.add(y, coef * w)                
-        
-        model.setObjective(obj_expr, GRB.MINIMIZE)
+            model.addConstr(pick0[i], 
+                            GRB.GREATER_EQUAL, requests[i][0])
 
+        objective = quicksum(pick0[i] - requests[i][0] for i in range(n_requests))
+        model.setObjective(objective, GRB.MINIMIZE)
         
-        model._cutfinder = Cut_Finder(n_vertices, edges)
-        model._vars = mvars
-        model._k = k
-        model._relobj = None
-        model._impcounter = 0
-        model._single_cut = single_cut
+        #model._cutfinder = Cut_Finder(n_vertices, edges)
+        model._x = x
+        model._pick0 = pick0
+        #model._k = k
+        #model._relobj = None
+        #model._impcounter = 0
+        #model._single_cut = single_cut
         
         # runtime information
-        model._root_cuttime = 0
-        model._tree_cuttime = 0
+        #model._root_cuttime = 0
+        #model._tree_cuttime = 0
         
         self.model = model
                
-    def check_graph(self, n_vertices, edges):
-        vertices = set([i for (i, _) in edges])
-        vertices |= set([i for (_, i) in edges])
-        assert(vertices == set(range(n_vertices)))
-        for u, v in edges:
-            assert(u < v)
-            assert(u < n_vertices)
-    
     def solve(self):
-        if self.timeout:
-            self.model.Params.TimeLimit = self.timeout        
-        try:
-            self.model.optimize(mincut_callback)
-        except GurobiError:
-            print(GurobiError.message)
-        
-        self.objective = None
-        self.clusters = None
-        self.optimal = (self.model.Status == GRB.OPTIMAL)
-        self.runtime = self.model.Runtime
-        self.node_count = self.model.nodecount
-        self.mip_gap = self.model.mipgap
-        self.objective = self.model.ObjVal
-        
-        if self.model.solcount > 0:
-            clusters = []
-            for i in range(self.k):
-                cluster = []
-                for j in range(self.n_vertices):
-                    if abs(self.model._vars[i][j].x) > 1e-4:
-                        cluster.append(j)
-                clusters.append(cluster)
-            self.clusters = clusters
+        self.model.optimize()
+        self._x = self.model._x
+        self._pick0 = self.model._pick0
+#         if self.timeout:
+#             self.model.Params.TimeLimit = self.timeout        
+#         try:
+#             self.model.optimize(mincut_callback)
+#         except GurobiError:
+#             print(GurobiError.message)
+#          
+#         self.objective = None
+#         self.clusters = None
+#         self.optimal = (self.model.Status == GRB.OPTIMAL)
+#         self.runtime = self.model.Runtime
+#         self.node_count = self.model.nodecount
+#         self.mip_gap = self.model.mipgap
+#         self.objective = self.model.ObjVal
+#          
+#         if self.model.solcount > 0:
+#             clusters = []
+#             for i in range(self.k):
+#                 cluster = []
+#                 for j in range(self.n_vertices):
+#                     if abs(self.model._vars[i][j].x) > 1e-4:
+#                         cluster.append(j)
+#                 clusters.append(cluster)
+#             self.clusters = clusters
         
     def print_stat(self):
 

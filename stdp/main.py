@@ -3,7 +3,7 @@
 
 from __future__ import print_function, division
 import argparse
-#from bnc_model import Bnc_Model
+from bnc_model import Bnc_Model
 
 def read_file(n_rows, n_cols, distances_file, taxis_file, requests_file):
     n_regions = n_rows * n_cols
@@ -22,7 +22,7 @@ def read_file(n_rows, n_cols, distances_file, taxis_file, requests_file):
         for line in f:
             line = line.strip()
             if not line: continue
-            t = int(line)
+            t = [int(i) for i in line.strip().split(' ')]
             taxis.append(t)
 
     requests = []
@@ -70,15 +70,25 @@ if __name__ == '__main__':
                   requests=requests,
                   timeout=timeout)
     
-    #m = Bnc_Model(**kwargs)
-    #m.solve()
+    m = Bnc_Model(**kwargs)
+    m.solve()
     #m.print_stat()
     
     #print('node count:', m.node_count)
     #print('mip gap:', m.mip_gap)
     #print('objective value:', m.objective)
     #print('runtime:', m.runtime)
-
+    
+    n_taxis = len(taxis)
+    n_requests = len(requests)
+    n = n_taxis + n_requests
+    for i in range(n):
+        for j in range(n):
+            print(m._x[i][j].x, end = ' ')
+        print('\n')
+    
+    for i in range(n_requests):    
+        print(m._pick0[i].x, end = ' ')
     #if (m.optimal):
     #    print('OPTIMAL')
     #else:
